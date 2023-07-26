@@ -6,9 +6,10 @@ import json
 from rasterio.mask import mask
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from rasterio.merge import merge
+import rioxarray
 
 
-def generate_points_grid(bounds, grid_space=0.01, crs="4326"):
+def generate_points_grid(bounds, grid_space=0.01, crs="4326", clip=False, shape=None):
     grid_lon = np.arange(bounds[0], bounds[2], grid_space)
     grid_lat = np.arange(bounds[1], bounds[3], grid_space)
     all_lats = np.meshgrid(grid_lon, grid_lat)[1].ravel()
@@ -22,6 +23,8 @@ def generate_points_grid(bounds, grid_space=0.01, crs="4326"):
     grid = gpd.GeoDataFrame(
         grid, geometry=gpd.points_from_xy(grid["lon"], grid["lat"]), crs=crs
     )
+    if clip==True:
+        grid = grid.clip(shape)
     return grid
 
 
@@ -106,3 +109,51 @@ def stitch_rasters(file_list, out_path):
     )
     with rasterio.open(out_path, "w", **out_meta, compress="lzw") as dest:
         dest.write(out_image)
+
+
+def read_raster_as_gdf(filename, x=None, y=None, name=None, dropna=True):
+    try:
+        data = rioxarray.open_rasterio(filename)
+        try:
+            df = data.to_dataframe().reset_index()
+        except:
+            if name is not None:
+                df = data.to_dataframe(name=name).reset_index()
+            else:
+                df = data.to_dataframe(name="data").reset_index()
+        if dropna == True:
+            df.dropna(inplace=True)
+        try:
+            gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df["x"], df["y"]))
+        except Exception as e:
+            print(
+                "Failed to convert to gdf, Please specify correct x,y values or try to open in xarray and convert"
+            )
+            print("Indices")
+            print(data.indexes)
+            print("Coordinates")
+            print(data.coords)
+            raise e
+        return gdf
+    except Exception as e:
+        print("Failed to open raster")
+        print("If your raster is in hdf format, please install gdal from condaforge")
+        raise (e)
+
+
+def convert_xarray_to_gdf(data, x=None, y=None, engine=None, dropna=True):
+    df = data.to_dataframe().reset_index()
+    if dropna == True:
+        df.dropna(inplace=True)
+    try:
+        gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df[x], df[y]))
+    except Exception as e:
+        print(
+            "Failed to convert to gdf, Please specify correct x,y values or try to open in xarray and convert"
+        )
+        print("Indices")
+        print(data.indexes)
+        print("Coordinates")
+        print(data.coords)
+        raise e
+    return gdf
