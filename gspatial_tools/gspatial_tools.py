@@ -8,6 +8,9 @@ from rasterio.mask import mask
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from rasterio.merge import merge
 from shapely.ops import clip_by_rect
+from shapely.affinity import scale, translate
+from shapely.geometry import Polygon
+from sklearn.neighbors import BallTree
 
 
 def generate_points_grid(bounds, grid_space=0.01, crs="4326", clip=False, shape=None):
@@ -248,3 +251,181 @@ def clip_each_geom_by_rect(gdf, xmin, ymin, xmax, ymax):
         lambda x: clip_by_rect(x, xmin, ymin, xmax, ymax)
     )
     return gdf
+
+
+def sample_points_from_polygons(gdf, n: int, crs=None):
+    """Samples n points inside set of polygons
+
+    Args:
+        gdf (GeoDataFrame/GeoSeries): GeoDataFrame/GeoSeries containing polygons
+        n (int): number of samples
+        crs (str): CRS for the points, If nothing is passed, CRS of gdf is set. Defaults to None
+
+    Returns:
+        points: A Geoseries containing sampled points
+    """
+    points = []
+    while len(points) < n:
+        x = np.random.uniform(gdf.total_bounds[0], gdf.total_bounds[2], n)
+        y = np.random.uniform(gdf.total_bounds[1], gdf.total_bounds[3], n)
+        points_series = gpd.GeoSeries(gpd.points_from_xy(x, y))
+        points_series = points_series[points_series.within(gdf.unary_union)]
+        points_series = points_series.drop_duplicates()
+        points.extend(list(points_series))
+        points = list(set(points))
+    points = gpd.GeoSeries(points)
+    points = points.sample(n).reset_index(drop=True).drop_duplicates()
+    if crs == None:
+        try:
+            points.crs = gdf.crs
+        except:
+            print("Could not set CRS")
+    else:
+        points.crs = crs
+    return points
+
+
+def sample_points_from_bbox(bounds, n: int, crs=None):
+    """Samples n points inside a bounding box
+
+    Args:
+        bounds (list): bounding box/total_bounds of a GeoDataFrame/GeoSeries/Polygon
+        n (int): number of samples
+
+    Returns:
+       points: A Geoseries containing sampled points
+    """
+    x = np.random.uniform(bounds[0], bounds[2], n)
+    y = np.random.uniform(bounds[1], bounds[3], n)
+    points = gpd.GeoSeries(gpd.points_from_xy(x, y))
+    if crs is not None:
+        points.crs = crs
+    return points
+
+
+def sample_data_from_raster(data, points, col_name="data", n_bands=1):
+    """_summary_
+
+    Args:
+        data (rasterio.io.DatasetReader): Raster file to sample data from
+        points (GeoDataFrame/GeoSeries): A GeoDataFrame/GeoSeries containing Point geometries.
+        col_name (str, optional): Name of the column containing sampled_data. Defaults to "data".
+        n_bands (int, optional): Number of bands. Defaults to 1.
+    Raises:
+        e: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        points = points.to_crs(data.crs)
+    except Exception as e:
+        print("Could not convert to data's CRS, ensure that CRS is set for points")
+        raise e
+    try:
+        coords = [(x, y) for x, y in zip(points["geometry"].x, points["geometry"].y)]
+    except:
+        points = gpd.GeoDataFrame(geometry=points)
+        coords = [(x, y) for x, y in zip(points["geometry"].x, points["geometry"].y)]
+    if n_bands == 1:
+        points[col_name] = [float(x) for x in data.sample(coords)]
+    else:
+        points[col_name] = [x for x in data.sample(coords)]
+    return points
+
+
+def nearest_points(
+    left_gdf,
+    right_gdf,
+    k=3,
+    leaf_size=15,
+    distance_unit="radians",
+    return_indices=False,
+):
+    """_summary_
+
+    Args:
+        left_gdf (GeoDataFrame): Dataframe for which nearest points need to be calculated
+        right_gdf (GeoDataFrame): Dataframe which contains the set of points from which nearest points will be calculated
+        k (int, optional): Number of nearesr points. Defaults to 3.
+        leaf_size (int, optional): Leafsize parameter for ball. Defaults to 15.
+        distance_unit (str, optional): Unit for distance. If "meters" or "kilometers" is passed, It'll approximate based on earth's radius. Defaults to "radians".
+        return_indices (bool, optional): If True, indices will be returned. Defaults to False.
+
+    Returns:
+        result: GeoDataFrame containing results
+    """
+    if left_gdf.crs != right_gdf.crs:
+        print("CRS of both GeoDataFrames should be the same")
+        return None
+    crs = left_gdf.crs
+    left_gdf = left_gdf.to_crs("4326")
+    right_gdf = right_gdf.to_crs("4326")
+
+    left_gdf_radians = np.array(
+        left_gdf["geometry"]
+        .apply(lambda coords: (np.deg2rad(coords.y), np.deg2rad(coords.x)))
+        .to_list()
+    )
+    right_gdf_radians = np.array(
+        right_gdf["geometry"]
+        .apply(lambda coords: (np.deg2rad(coords.y), np.deg2rad(coords.x)))
+        .to_list()
+    )
+
+    tree = BallTree(right_gdf_radians, leaf_size=leaf_size, metric="haversine")
+    distances, indices = tree.query(left_gdf_radians, k=k)
+    del left_gdf_radians, right_gdf_radians
+
+    left_gdf = left_gdf.to_crs(crs)
+    right_gdf = right_gdf.to_crs(crs)
+
+    indices_map = right_gdf["geometry"].to_dict()
+    indices_df = pd.DataFrame(indices)
+    geom_df = indices_df.applymap(indices_map.get)
+    del indices_map, right_gdf, indices
+
+    distances_df = pd.DataFrame(distances)
+    geom_df.columns = ["nearest_geom_" + str(x) for x in geom_df.columns]
+    distances_df.columns = ["distance_" + str(x) for x in distances_df.columns]
+    if distance_unit == "meters":
+        distances_df = distances_df * 6371000
+    if distance_unit == "kilometers":
+        distances_df = distances_df * 6371
+    result = left_gdf.copy()
+    del left_gdf, distances
+
+    result[geom_df.columns] = geom_df
+    result[distances_df.columns] = distances_df
+    if return_indices == True:
+        indices_df.columns = ["index_" + str(x) for x in indices_df.columns]
+        result[indices_df.columns] = indices_df
+    return result
+
+
+def move_and_scale_shape(
+    gdf, identifier_col, identifier_value, scale_factor, x_distance, y_distance
+):
+    """_summary_
+
+    Args:
+        gdf (GeoDataFrame): GeoDataFrame to be modified
+        identifier_col (str): Column name to identify polygon/shape
+        identifier_value (str): Value corresponding to the column name
+        scale_factor (float): Scale factor to resize the polygon
+        x_distance (float): Offset in x coordinate
+        y_distance (float): Offset in x coordinate
+
+    Returns:
+        modified_gdf (GeoDataFrame): Returns the modfied GeoDataFrame
+    """
+    shape_polygon = gdf.loc[gdf[identifier_col] == identifier_value, "geometry"].iloc[0]
+    shape_scaled = scale(
+        shape_polygon, xfact=scale_factor, yfact=scale_factor, origin="centroid"
+    )
+    shape_moved = translate(shape_scaled, xoff=x_distance, yoff=y_distance)
+    modified_gdf = gdf.copy()
+    modified_gdf.loc[
+        modified_gdf[identifier_col] == identifier_value, "geometry"
+    ] = shape_moved
+    return modified_gdf
