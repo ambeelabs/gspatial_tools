@@ -5,7 +5,7 @@ geopandas, xarray, rasterio and rioxarray. It makes a lot of things we
 want to do easier
 gspatial-plot is licensed under MIT License.
 
-# Features
+# Features
 
 1. Generate Lat Lon grid at specific resolution
 
@@ -33,6 +33,6 @@ gspatial-plot is licensed under MIT License.
 
 13. Move and Scale a polygon/shape from a GeoDataFrame
 
-# Installing
+# Installing
 
 `pip install gspatial-tools`
