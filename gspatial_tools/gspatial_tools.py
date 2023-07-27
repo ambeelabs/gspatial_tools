@@ -47,7 +47,7 @@ def filter_points_to_radius(grid, points, radius, cap_style=3):
         cap_style (int, optional): cap_style parameter to buffer function. Defaults to 3 which is a square.
 
     Returns:
-        _type_: _description_
+        GeoDataFrame: filtered GeoDataFrame
     """
     points_buffered = points.copy()
     points_buffered["geometry"] = points_buffered.buffer(radius, cap_style=cap_style)
@@ -243,7 +243,7 @@ def clip_each_geom_by_rect(gdf, xmin, ymin, xmax, ymax):
         ymax (float): Maximum y bounds
 
     Returns:
-        _type_: _description_
+        gdf: GeoDataFrame
     """
     from shapely.ops import clip_by_rect
 
@@ -305,7 +305,7 @@ def sample_points_from_bbox(bounds, n: int, crs=None):
 
 
 def sample_data_from_raster(data, points, col_name="data", n_bands=1):
-    """_summary_
+    """Samples data directly from a raster file
 
     Args:
         data (rasterio.io.DatasetReader): Raster file to sample data from
@@ -313,10 +313,10 @@ def sample_data_from_raster(data, points, col_name="data", n_bands=1):
         col_name (str, optional): Name of the column containing sampled_data. Defaults to "data".
         n_bands (int, optional): Number of bands. Defaults to 1.
     Raises:
-        e: _description_
+        e: Any exception due to crs issues
 
     Returns:
-        _type_: _description_
+        points: GeoDataFrame
     """
     try:
         points = points.to_crs(data.crs)
@@ -343,7 +343,7 @@ def nearest_points(
     distance_unit="radians",
     return_indices=False,
 ):
-    """_summary_
+    """Returns k nearest points to left GeoDataFrame
 
     Args:
         left_gdf (GeoDataFrame): Dataframe for which nearest points need to be calculated
@@ -409,7 +409,7 @@ def nearest_points(
 def move_and_scale_shape(
     gdf, identifier_col, identifier_value, scale_factor, x_distance, y_distance
 ):
-    """_summary_
+    """Move and scale a specific polygon in a GeoDataFrame
 
     Args:
         gdf (GeoDataFrame): GeoDataFrame to be modified
