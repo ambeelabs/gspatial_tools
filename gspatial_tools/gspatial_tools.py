@@ -4,13 +4,6 @@ import geopandas as gpd
 import rasterio
 import json
 import rioxarray
-from rasterio.mask import mask
-from rasterio.warp import calculate_default_transform, reproject, Resampling
-from rasterio.merge import merge
-from shapely.ops import clip_by_rect
-from shapely.affinity import scale, translate
-from shapely.geometry import Polygon
-from sklearn.neighbors import BallTree
 
 
 def generate_points_grid(bounds, grid_space=0.01, crs="4326", clip=False, shape=None):
@@ -73,6 +66,8 @@ def bulk_clip_and_save_raster(data, gdf, names_col=None, path=None):
         names_col (str, optional): Column name to name to file saved. Defaults to None.
         path (str, optional): Path to save clipped files. Defaults to None.
     """
+    from rasterio.mask import mask
+
     gdf = gdf.copy()
     gdf = gdf.to_crs(data.crs)
     gdf_json = json.loads(gdf.to_json())
@@ -113,6 +108,8 @@ def reproject_rasterio(data, dst_crs, output_file):
         dst_crs (str): Target crs supported by rasterio
         output_file (str): Output file name
     """
+    from rasterio.warp import calculate_default_transform, reproject, Resampling
+
     transform, width, height = calculate_default_transform(
         data.crs, dst_crs, data.width, data.height, *data.bounds
     )
@@ -141,6 +138,8 @@ def stitch_rasters(file_list, out_path):
         file_list (list): List of filenames
         out_path (str): Output file path/name
     """
+    from rasterio.merge import merge
+
     to_stitch = []
     for file in file_list:
         raster = rasterio.open(file)
@@ -246,6 +245,8 @@ def clip_each_geom_by_rect(gdf, xmin, ymin, xmax, ymax):
     Returns:
         _type_: _description_
     """
+    from shapely.ops import clip_by_rect
+
     gdf = gdf.copy()
     gdf["geometry"] = gdf["geometry"].apply(
         lambda x: clip_by_rect(x, xmin, ymin, xmax, ymax)
@@ -355,6 +356,8 @@ def nearest_points(
     Returns:
         result: GeoDataFrame containing results
     """
+    from sklearn.neighbors import BallTree
+
     if left_gdf.crs != right_gdf.crs:
         print("CRS of both GeoDataFrames should be the same")
         return None
@@ -419,6 +422,8 @@ def move_and_scale_shape(
     Returns:
         modified_gdf (GeoDataFrame): Returns the modfied GeoDataFrame
     """
+    from shapely.affinity import scale, translate
+
     shape_polygon = gdf.loc[gdf[identifier_col] == identifier_value, "geometry"].iloc[0]
     shape_scaled = scale(
         shape_polygon, xfact=scale_factor, yfact=scale_factor, origin="centroid"

@@ -21,7 +21,7 @@ setup(
         "pandas>=1.5.3",
         "rasterio>=1.3.8",
         "rioxarray>=0.13.3",
-        "scikit_learn>=1.3.0",
+        "scikit_learn>=1.2.0",
         "shapely>=2.0.1",
     ],
     classifiers=[
