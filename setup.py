@@ -8,7 +8,7 @@ long_description = open(os.path.join(here, "README.md")).read()
 setup(
     name="gspatial_tools",
     packages=find_packages(include=["gspatial_tools"]),
-    version="0.1.0a",
+    version="0.1.0",
     author="Ambee",
     license="MIT",
     url="https://github.com/ambeelabs/gspatial_tools/",
@@ -25,7 +25,7 @@ setup(
         "shapely>=2.0.1",
     ],
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3.10",
