@@ -6,9 +6,7 @@
 [![Documentation Status](https://readthedocs.org/projects/gspatial-tools/badge/?version=latest)](https://gspatial-tools.readthedocs.io/en/latest/?badge=latest)
 
 gspatial_tools is a library of utility functions written on top of 
-geopandas, xarray, rasterio and rioxarray. It makes a lot of things we 
-want to do easier
-gspatial-plot is licensed under MIT License.
+geopandas, xarray, rasterio and rioxarray. 
 
 # Features
 
